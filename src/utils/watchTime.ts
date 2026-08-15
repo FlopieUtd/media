@@ -12,6 +12,14 @@ export const dateKey = (d: Date): string => {
   return `${y}-${m}-${day}`;
 };
 
+export const formatDuration = (s: number): string => {
+  const h = Math.floor(s / 3600);
+  const m = Math.round((s % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return s > 0 ? "<1m" : "0m";
+};
+
 const load = (): WatchMap => {
   try {
     return JSON.parse(localStorage.getItem(KEY) ?? "{}");

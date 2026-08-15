@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import type { VideoFile } from "../../types/media";
 import { getProgress, saveProgress } from "../../utils/progress";
 import { addWatchSeconds } from "../../utils/watchTime";
+import { logWatch } from "../../utils/watchLog";
+import { formatEpisodeTitle } from "../../utils/video";
 
 interface Props {
   video: VideoFile;
@@ -94,6 +96,9 @@ export const VideoPlayer = ({ video, onClose, onPrev, onNext }: Props) => {
   // Always holds the latest { id, time, duration } — never stale in closures
   const progressRef = useRef({ id: video.id, time: 0, duration: 0 });
   const loadStartRef = useRef(performance.now());
+  // The watch-time tally below is set up once — this keeps the episode it should
+  // be credited to reachable from inside that interval.
+  const videoMetaRef = useRef(video);
 
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -232,6 +237,10 @@ export const VideoPlayer = ({ video, onClose, onPrev, onNext }: Props) => {
   // capping it to wall-clock time discards forward-seek jumps. Backward seeks
   // and episode changes go negative and are dropped by addWatchSeconds.
   useEffect(() => {
+    videoMetaRef.current = video;
+  }, [video]);
+
+  useEffect(() => {
     let lastWall = Date.now();
     let lastTime = 0;
     const id = setInterval(() => {
@@ -242,7 +251,10 @@ export const VideoPlayer = ({ video, onClose, onPrev, onNext }: Props) => {
       if (!el) return;
       const played = el.currentTime - lastTime;
       lastTime = el.currentTime;
-      if (!el.paused && !el.ended) addWatchSeconds(Math.min(played, wallDelta));
+      if (el.paused || el.ended) return;
+      const credited = Math.min(played, wallDelta);
+      addWatchSeconds(credited);
+      logWatch(videoMetaRef.current, credited);
     }, 5000);
     return () => clearInterval(id);
   }, []);
@@ -361,13 +373,7 @@ export const VideoPlayer = ({ video, onClose, onPrev, onNext }: Props) => {
   const VolumeIcon = muted || volume === 0 ? IconVolumeMute : volume < 0.5 ? IconVolumeLow : IconVolumeHigh;
   const progress = duration ? (currentTime / duration) * 100 : 0;
 
-  // displayName is "E03 · Title" for episodes — prepend the series number from
-  // the filename's SxxEyy tag, falling back to a number in the season folder.
-  const seriesNum = video.name.match(/S(\d+)\s*E\d+/i)?.[1] ?? video.season?.match(/\d+/)?.[0];
-  const bannerTitle =
-    seriesNum && /^E\d+/i.test(video.displayName)
-      ? `S${seriesNum.padStart(2, "0")} ${video.displayName}`
-      : video.displayName;
+  const bannerTitle = formatEpisodeTitle(video);
 
   return (
     <div

@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getWatchTime, dateKey } from "../../utils/watchTime";
+import { getWatchTime, dateKey, formatDuration } from "../../utils/watchTime";
+import { getWatchLog } from "../../utils/watchLog";
+import { EpisodeLog } from "./EpisodeLog";
 
 type View = "week" | "month";
 
@@ -8,14 +10,6 @@ interface Day {
   date: Date;
   seconds: number;
 }
-
-const formatDuration = (s: number) => {
-  const h = Math.floor(s / 3600);
-  const m = Math.round((s % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m`;
-  return s > 0 ? "<1m" : "0m";
-};
 
 // Monday-start week containing the given date. setDate normalizes across month
 // boundaries and DST transitions — fixed-ms arithmetic would skip or repeat a
@@ -39,6 +33,7 @@ export const Stats = () => {
   const [anchor, setAnchor] = useState(() => new Date());
 
   const watch = useMemo(() => getWatchTime(), []);
+  const log = useMemo(() => getWatchLog(), []);
 
   const days = useMemo<Day[]>(() => {
     if (view === "week") {
@@ -57,9 +52,17 @@ export const Stats = () => {
     });
   }, [view, anchor, watch]);
 
+  const periodLog = useMemo(() => {
+    const keys = new Set(days.map((d) => dateKey(d.date)));
+    return log
+      .filter((e) => keys.has(dateKey(new Date(e.startedAt))))
+      .sort((a, b) => b.startedAt - a.startedAt);
+  }, [log, days]);
+
   const max = Math.max(1, ...days.map((d) => d.seconds));
   const total = days.reduce((sum, d) => sum + d.seconds, 0);
   const watchedDays = days.filter((d) => d.seconds > 0).length;
+  const episodeCount = new Set(periodLog.map((e) => e.id)).size;
   const todayKey = dateKey(new Date());
 
   const label =
@@ -133,6 +136,7 @@ export const Stats = () => {
         <div className="flex gap-[32px] mb-[28px] text-[#888] text-[13px]">
           <span>Total <span className="text-white font-semibold">{formatDuration(total)}</span></span>
           <span>Active days <span className="text-white font-semibold">{watchedDays}</span></span>
+          <span>Episodes <span className="text-white font-semibold">{episodeCount}</span></span>
         </div>
 
         {/* Bar chart */}
@@ -178,6 +182,8 @@ export const Stats = () => {
         {total === 0 && (
           <p className="text-[#555] text-[14px] mt-[32px]">No watch time recorded for this {view}.</p>
         )}
+
+        <EpisodeLog entries={periodLog} />
       </div>
     </div>
   );

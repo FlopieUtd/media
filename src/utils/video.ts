@@ -1,3 +1,5 @@
+import type { VideoFile } from "../types/media";
+
 // Keyed by video.id — persists for the session so re-mounts don't re-generate
 const thumbnailCache = new Map<string, string | null>();
 
@@ -76,6 +78,17 @@ export const formatTime = (s: number): string => {
   const sec = Math.floor(s % 60);
   if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
   return `${m}:${String(sec).padStart(2, "0")}`;
+};
+
+// displayName is "E03 · Title" for episodes — prepend the series number from the
+// filename's SxxEyy tag, falling back to a number in the season folder.
+export const formatEpisodeTitle = (
+  video: Pick<VideoFile, "name" | "displayName" | "season">
+): string => {
+  const seriesNum = video.name.match(/S(\d+)\s*E\d+/i)?.[1] ?? video.season?.match(/\d+/)?.[0];
+  return seriesNum && /^E\d+/i.test(video.displayName)
+    ? `S${seriesNum.padStart(2, "0")} ${video.displayName}`
+    : video.displayName;
 };
 
 export const formatDisplayName = (filename: string) =>
